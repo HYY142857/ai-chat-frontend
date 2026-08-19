@@ -68,7 +68,7 @@ function Chat() {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://127.0.0.1:8000/chat/stream', {
+      const response = await fetch('https://ai-chat-backend-be6s.onrender.com/chat/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
