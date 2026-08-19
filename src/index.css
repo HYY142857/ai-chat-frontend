@@ -896,19 +896,6 @@ body {
     --sidebar-width: 260px;
   }
 
-  .chat-sidebar {
-    position: fixed;
-    left: 0;
-    top: 0;
-    height: 100vh;
-    z-index: 100;
-    box-shadow: var(--shadow-lg);
-  }
-
-  .chat-sidebar.closed {
-    margin-left: calc(-1 * var(--sidebar-width));
-  }
-
   .message-row {
     padding: 8px 16px;
   }
@@ -939,5 +926,38 @@ body {
   .message-bubble {
     max-width: 90%;
     font-size: 14px;
+  }
+}
+
+/* 手机端：侧边栏默认隐藏 */
+@media (max-width: 768px) {
+  .chat-sidebar {
+    position: fixed;        /* 脱离文档流，盖在内容上面 */
+    top: 0;
+    left: 0;
+    height: 100%;
+    z-index: 100;           /* 确保在最上层 */
+    transform: translateX(-100%);  /* 默认滑到屏幕外 */
+    transition: transform 0.3s ease;
+  }
+
+  .chat-sidebar.open {
+    transform: translateX(0);  /* 打开时滑回来 */
+  }
+
+  /* 可选：加一个半透明遮罩，点击遮罩关闭侧边栏 */
+  .sidebar-overlay {
+    display: none;
+  }
+
+  .sidebar-overlay.show {
+    display: block;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 99;            /* 在侧边栏下面，在内容上面 */
   }
 }

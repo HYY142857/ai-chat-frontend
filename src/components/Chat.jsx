@@ -176,7 +176,7 @@ function Chat() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    navigate('/');
+    window.location.href = '/'
   };
 
   const loadHistoryConversation = (item) => {
@@ -269,8 +269,16 @@ function Chat() {
         </div>
       </aside>
 
+      <div 
+        className={`sidebar-overlay ${sidebarOpen ? 'show' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
       {/* Main Chat Area */}
-      <main className="chat-main">
+      <main 
+        className="chat-main" 
+        onClick={() => { if (sidebarOpen) setSidebarOpen(false); }}
+      >
         <div className="chat-topbar">
           <button
             className="toggle-sidebar-btn"
