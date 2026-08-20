@@ -9,6 +9,7 @@ function Login() {
   const [messageType, setMessageType] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [inviteCode, setInviteCode] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -22,7 +23,7 @@ function Login() {
         localStorage.setItem('token', res.data.token);
         window.location.href = '/chat';
       } else {
-        await api.post('/auth/register', { username, password });
+        await api.post('/auth/register', { username, password, invite_code: inviteCode });
         setMessageType('success');
         setMessage('注册成功！请登录。');
         setIsLogin(true);
@@ -119,6 +120,20 @@ function Login() {
               </button>
             </div>
           </div>
+          
+          {!isLogin && (
+            <div className="input-group">
+              <label htmlFor="inviteCode">邀请码</label>
+              <input
+                id="inviteCode"
+                type="text"
+                placeholder="请输入邀请码"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value)}
+                required
+              />
+            </div>
+          )}
 
           {message && (
             <div className={`auth-message ${messageType}`}>
