@@ -43,7 +43,15 @@ function Chat() {
   const fetchHistory = async () => {
     try {
       const res = await api.post('/chat/history');
-      setHistory(res.data.messages || []);
+      const records = res.data.messages || [];
+      setHistory(records);
+      // 把最近的记录加载到聊天区
+      const loaded = [];
+      records.forEach((item) => {
+        loaded.push({ role: 'user', content: item.message });
+        loaded.push({ role: 'assistant', content: item.reply });
+      });
+      setMessages(loaded);
     } catch {
       // silently fail
     }
@@ -110,18 +118,20 @@ function Chat() {
       fetchHistory();
     } catch (err) {
       if (err.name !== 'AbortError') {
+        let errorMsg = '请求失败，请重试。';
+        if (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError')) {
+          errorMsg = '网络连接失败，请检查网络后重试。';
+        }
         setMessages((prev) => {
           const updated = [...prev];
           updated[updated.length - 1] = {
             role: 'assistant',
-            content: '请求失败，请重试。',
+            content: errorMsg,
+            type: 'error',
           };
           return updated;
         });
       }
-    } finally {
-      setIsStreaming(false);
-      abortControllerRef.current = null;
     }
   };
 
@@ -149,9 +159,20 @@ function Chat() {
       const res = await api.post('/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      showNotification(`文件 "${res.data.filename}" 上传成功 (${formatSize(res.data.size)})`);
-    } catch {
-      showNotification('文件上传失败', 'error');
+      // 在聊天区插入文件卡片
+      setMessages((prev) => [...prev, {
+        role: 'user',
+        type: 'file',
+        filename: res.data.filename,
+        size: res.data.size,
+      }]);
+    } catch (err) {
+      const detail = err.response?.data?.detail || '文件上传失败，请重试';
+      setMessages((prev) => [...prev, {
+        role: 'assistant',
+        content: detail,
+        type: 'error',
+      }]);
     }
 
     e.target.value = '';
@@ -310,16 +331,30 @@ function Chat() {
                 {msg.role === 'assistant' && (
                   <div className="message-avatar ai-avatar">AI</div>
                 )}
-                <div className={`message-bubble ${msg.role}`}>
-                  {msg.content || (isStreaming && idx === messages.length - 1 ? (
-                    <span className="typing-indicator">
-                      <span></span><span></span><span></span>
-                    </span>
-                  ) : '')}
-                  {msg.role === 'assistant' && msg.content && isStreaming && idx === messages.length - 1 && (
-                    <span className="cursor-blink">|</span>
-                  )}
+                {msg.type === 'file' ? (
+                  <div className="message-bubble user file-card">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                      <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" />
+                      <polyline points="14 2 14 8 20 8" />
+                    </svg>
+                    <div className="file-info">
+                      <span className="file-name">{msg.filename}</span>
+                      <span className="file-size">{formatSize(msg.size)}</span>
+                    </div>
+                    <span className="file-badge">已加载</span>
+                  </div>
+                ) : (
+                  <div className={`message-bubble ${msg.role} ${msg.type === 'error' ? 'error-msg' : ''}`}>
+                    {msg.content || (isStreaming && idx === messages.length - 1 ? (
+                      <span className="typing-indicator">
+                        <span></span><span></span><span></span>
+                      </span>
+                    ) : '')}
+                    {msg.role === 'assistant' && msg.content && isStreaming && idx === messages.length - 1 && (
+                      <span className="cursor-blink">|</span>
+                    )}
                 </div>
+                )}
                 {msg.role === 'user' && (
                   <div className="message-avatar user-avatar">
                     {username ? username.charAt(0).toUpperCase() : 'U'}

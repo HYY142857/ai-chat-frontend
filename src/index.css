@@ -961,3 +961,47 @@ body {
     z-index: 99;            /* 在侧边栏下面，在内容上面 */
   }
 }
+
+/* 文件卡片 */
+.file-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  padding: 10px 14px;
+}
+
+.file-card .file-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.file-card .file-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e2e8f0;
+  word-break: break-all;
+}
+
+.file-card .file-size {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.file-card .file-badge {
+  font-size: 11px;
+  background: rgba(99, 102, 241, 0.3);
+  color: #a5b4fc;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+/* 错误消息 */
+.message-bubble.error-msg {
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
