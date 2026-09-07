@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api';
+import ReactMarkdown from 'react-markdown';
 
 function Chat() {
   const [messages, setMessages] = useState([]);
@@ -229,7 +230,7 @@ function Chat() {
             </svg>
             <span>AI Chat</span>
           </div>
-          <button className="new-chat-btn" onClick={() => setMessages([])} title="新对话">
+          <button className="new-chat-btn" onClick={() => { setMessages([]); fetchHistory(); }} title="新对话">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
@@ -341,7 +342,11 @@ function Chat() {
                   </div>
                 ) : (
                   <div className={`message-bubble ${msg.role} ${msg.type === 'error' ? 'error-msg' : ''}`}>
-                    {msg.content || (isStreaming && idx === messages.length - 1 ? (
+                    {msg.content ? (
+                      msg.role === 'assistant' ? (
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      ) : msg.content
+                    ) : (isStreaming && idx === messages.length - 1 ? (
                       <span className="typing-indicator">
                         <span></span><span></span><span></span>
                       </span>
