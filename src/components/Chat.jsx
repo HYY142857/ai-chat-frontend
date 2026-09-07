@@ -124,6 +124,10 @@ function Chat() {
           return updated;
         });
       }
+    } finally {
+      setIsStreaming(false);
+      abortControllerRef.current = null;
+      inputRef.current?.focus();
     }
   };
 
