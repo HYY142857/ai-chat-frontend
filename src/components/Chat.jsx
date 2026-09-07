@@ -43,15 +43,7 @@ function Chat() {
   const fetchHistory = async () => {
     try {
       const res = await api.post('/chat/history');
-      const records = res.data.messages || [];
-      setHistory(records);
-      // 把最近的记录加载到聊天区
-      const loaded = [];
-      records.forEach((item) => {
-        loaded.push({ role: 'user', content: item.message });
-        loaded.push({ role: 'assistant', content: item.reply });
-      });
-      setMessages(loaded);
+      setHistory(res.data.messages || []);
     } catch {
       // silently fail
     }
