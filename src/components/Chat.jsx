@@ -3,6 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import api from '../api';
 import ReactMarkdown from 'react-markdown';
 
+function fixMarkdown(text) {
+  if (!text) return text;
+  // 修复标题：##1.标题 → ## 1.标题（#后面必须有空格）
+  return text.replace(/^(#{1,6})(?=\S)/gm, '$1 ');
+}
+
 function Chat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
@@ -44,7 +50,15 @@ function Chat() {
   const fetchHistory = async () => {
     try {
       const res = await api.post('/chat/history');
-      setHistory(res.data.messages || []);
+      const records = res.data.messages || [];
+      setHistory(records);
+      // 加载最近10条到聊天区
+      const loaded = [];
+      records.slice(-10).forEach((item) => {
+        loaded.push({ role: 'user', content: item.message });
+        loaded.push({ role: 'assistant', content: item.reply });
+      });
+      setMessages(loaded);
     } catch {
       // silently fail
     }
@@ -344,7 +358,7 @@ function Chat() {
                   <div className={`message-bubble ${msg.role} ${msg.type === 'error' ? 'error-msg' : ''}`}>
                     {msg.content ? (
                       msg.role === 'assistant' ? (
-                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        <ReactMarkdown>{fixMarkdown(msg.content)}</ReactMarkdown>
                       ) : msg.content
                     ) : (isStreaming && idx === messages.length - 1 ? (
                       <span className="typing-indicator">
