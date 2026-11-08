@@ -5,7 +5,6 @@ import ReactMarkdown from 'react-markdown';
 
 function fixMarkdown(text) {
   if (!text) return text;
-  // 修复标题：##1.标题 → ## 1.标题（#后面必须有空格）
   return text.replace(/^(#{1,6})(?=\S)/gm, '$1 ');
 }
 
@@ -13,7 +12,8 @@ function Chat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
-  const [history, setHistory] = useState([]);
+  const [conversations, setConversations] = useState([]);  // 改：会话列表
+  const [activeConvId, setActiveConvId] = useState(null); // 新增：当前会话ID
   const [username, setUsername] = useState('');
   const [notification, setNotification] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -33,9 +33,10 @@ function Chat() {
     scrollToBottom();
   }, [messages, scrollToBottom]);
 
+  // 页面加载：拿用户信息 + 会话列表（不再直接拉消息）
   useEffect(() => {
     fetchUser();
-    fetchHistory();
+    fetchConversations();
   }, []);
 
   const fetchUser = async () => {
@@ -47,21 +48,38 @@ function Chat() {
     }
   };
 
-  const fetchHistory = async () => {
+  // 新增：获取会话列表（替换旧的 fetchHistory）
+  const fetchConversations = async () => {
     try {
-      const res = await api.post('/chat/history');
+      const res = await api.get('/chat/conversations');
+      setConversations(res.data.conversations || []);
+    } catch {
+      // 旧版本后端兼容：如果新接口没有，就跳过
+    }
+  };
+
+  // 新增：点左侧会话时，加载这个会话的所有消息
+  const loadConversation = async (convId) => {
+    try {
+      const res = await api.get(`/chat/conversations/${convId}/messages`);
       const records = res.data.messages || [];
-      setHistory(records);
-      // 加载最近10条到聊天区
       const loaded = [];
-      records.slice(-10).forEach((item) => {
+      records.forEach((item) => {
         loaded.push({ role: 'user', content: item.message });
         loaded.push({ role: 'assistant', content: item.reply });
       });
       setMessages(loaded);
-    } catch {
-      // silently fail
+      setActiveConvId(convId);
+    } catch (err) {
+      console.error('加载会话失败:', err);
     }
+  };
+
+  // 新增：新建空会话（左侧点 + 号）
+  const handleNewChat = async () => {
+    setMessages([]);            // 清空聊天区
+    setActiveConvId(null);      // 表示没有选会话，等用户发第一条消息时自动创建
+    // 不调后端创建空会话，让后端在发第一条消息时自动创建
   };
 
   const showNotification = (text, type = 'success') => {
@@ -83,13 +101,20 @@ function Chat() {
 
     try {
       const token = localStorage.getItem('token');
+
+      // 构造请求体：有 activeConvId 就传，没有就不传（后端会自动新建会话）
+      const body = { message: text };
+      if (activeConvId) {
+        body.conversation_id = activeConvId;
+      }
+
       const response = await fetch('https://ai-chat-backend-be6s.onrender.com/chat/stream', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify(body),
         signal: abortControllerRef.current.signal,
       });
 
@@ -122,7 +147,17 @@ function Chat() {
         }
       }
 
-      fetchHistory();
+      // 发送完成后，刷新会话列表，并把当前 activeConvId 设好
+      const convRes = await api.get('/chat/conversations');
+      const newConvs = convRes.data.conversations || [];
+      setConversations(newConvs);
+
+      // 如果之前没有 activeConvId（说明是新建会话的第一条消息），
+      // 直接用刚拿到的 newConvs 里最新那个
+      if (!activeConvId && newConvs.length > 0) {
+        setActiveConvId(newConvs[0].id);
+      }
+      
     } catch (err) {
       if (err.name !== 'AbortError') {
         let errorMsg = '请求失败，请重试。';
@@ -170,7 +205,6 @@ function Chat() {
       const res = await api.post('/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
-      // 在聊天区插入文件卡片
       setMessages((prev) => [...prev, {
         role: 'user',
         type: 'file',
@@ -195,12 +229,34 @@ function Chat() {
     return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
   };
 
-  const handleClearHistory = async () => {
+  // 修改：删除单个会话（带 conversation_id）
+  const handleDeleteConversation = async (convId, e) => {
+    e.stopPropagation();
     try {
-      await api.delete('/chat');
-      setHistory([]);
+      await api.delete(`/chat/conversations/${convId}`);
+      await fetchConversations();
+      if (activeConvId === convId) {
+        setMessages([]);
+        setActiveConvId(null);
+      }
+      showNotification('会话已删除');
+    } catch {
+      showNotification('删除失败', 'error');
+    }
+  };
+
+  // 新增：清空所有会话（循环调删除，或者后端加一个清空全部接口）
+  const handleClearAll = async () => {
+    if (!conversations.length) return;
+    try {
+      // 一个个删，简单直接
+      for (const c of conversations) {
+        await api.delete(`/chat/conversations/${c.id}`);
+      }
+      setConversations([]);
       setMessages([]);
-      showNotification('聊天记录已清空');
+      setActiveConvId(null);
+      showNotification('已清空所有会话');
     } catch {
       showNotification('清空失败', 'error');
     }
@@ -208,26 +264,17 @@ function Chat() {
 
   const handleLogout = () => {
     localStorage.removeItem('token');
-    window.location.href = '/'
-  };
-
-  const loadHistoryConversation = (item) => {
-    setMessages([
-      { role: 'user', content: item.message },
-      { role: 'assistant', content: item.reply },
-    ]);
+    window.location.href = '/';
   };
 
   return (
     <div className="chat-container">
-      {/* Notification Toast */}
       {notification && (
         <div className={`notification ${notification.type}`}>
           {notification.text}
         </div>
       )}
 
-      {/* Sidebar */}
       <aside className={`chat-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
           <div className="sidebar-brand">
@@ -244,7 +291,8 @@ function Chat() {
             </svg>
             <span>AI Chat</span>
           </div>
-          <button className="new-chat-btn" onClick={() => { setMessages([]); fetchHistory(); }} title="新对话">
+          {/* 修改：点 + 号 = 新建空会话 */}
+          <button className="new-chat-btn" onClick={handleNewChat} title="新对话">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <line x1="12" y1="5" x2="12" y2="19" />
               <line x1="5" y1="12" x2="19" y2="12" />
@@ -252,37 +300,49 @@ function Chat() {
           </button>
         </div>
 
-        <div className="sidebar-section-title">历史记录</div>
+        <div className="sidebar-section-title">对话</div>
 
+        {/* 修改：左侧栏显示会话列表，不再显示消息列表 */}
         <div className="sidebar-history">
-          {history.length === 0 ? (
-            <div className="sidebar-empty">暂无历史记录</div>
+          {conversations.length === 0 ? (
+            <div className="sidebar-empty">暂无对话，点 + 开始</div>
           ) : (
-            history.map((item, idx) => (
+            conversations.map((conv) => (
               <button
-                key={idx}
-                className="history-item"
-                onClick={() => loadHistoryConversation(item)}
-                title={item.message}
+                key={conv.id}
+                className={`history-item ${activeConvId === conv.id ? 'active' : ''}`}
+                onClick={() => loadConversation(conv.id)}
+                title={conv.title}
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                 </svg>
-                <span>{item.message}</span>
+                <div className="conv-info">
+                  <span className="conv-title">{conv.title}</span>
+                  <span className="conv-preview">{conv.preview}</span>
+                </div>
+                {/* 新增：每个会话旁边有删除按钮 */}
+                <button
+                  className="conv-delete-btn"
+                  onClick={(e) => handleDeleteConversation(conv.id, e)}
+                  title="删除这个会话"
+                >
+                  ✕
+                </button>
               </button>
             ))
           )}
         </div>
 
         <div className="sidebar-footer">
-          <button className="sidebar-btn" onClick={handleClearHistory}>
+          <button className="sidebar-btn" onClick={handleClearAll}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <polyline points="3 6 5 6 21 6" />
               <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
               <path d="M10 11v6" />
               <path d="M14 11v6" />
             </svg>
-            <span>清空记录</span>
+            <span>清空所有</span>
           </button>
           <button className="sidebar-btn logout" onClick={handleLogout}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -301,14 +361,13 @@ function Chat() {
         </div>
       </aside>
 
-      <div 
+      <div
         className={`sidebar-overlay ${sidebarOpen ? 'show' : ''}`}
         onClick={() => setSidebarOpen(false)}
       />
 
-      {/* Main Chat Area */}
-      <main 
-        className="chat-main" 
+      <main
+        className="chat-main"
         onClick={() => { if (sidebarOpen) setSidebarOpen(false); }}
       >
         <div className="chat-topbar">
@@ -322,7 +381,12 @@ function Chat() {
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <span className="topbar-title">对话</span>
+          {/* 修改：显示当前选中的会话标题 */}
+          <span className="topbar-title">
+            {activeConvId
+              ? (conversations.find(c => c.id === activeConvId)?.title || '对话')
+              : '新对话'}
+          </span>
         </div>
 
         <div className="chat-messages">
