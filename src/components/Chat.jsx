@@ -318,8 +318,7 @@ function Chat() {
                   <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
                 </svg>
                 <div className="conv-info">
-                  <span className="conv-title">{conv.title}</span>
-                  <span className="conv-preview">{conv.preview}</span>
+                  <span className="conv-title">{conv.title || '新对话'}</span>
                 </div>
                 {/* 新增：每个会话旁边有删除按钮 */}
                 <button
